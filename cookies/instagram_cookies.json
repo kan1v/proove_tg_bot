@@ -1,0 +1,14 @@
+[
+  {"domain":".instagram.com","expirationDate":1772400804.119207,"hostOnly":false,"httpOnly":true,"name":"mid","path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"Z5VYpAAEAAFbVKHz88wXoSklnMjb"},
+  {"domain":".instagram.com","expirationDate":1780573036.194675,"hostOnly":false,"httpOnly":true,"name":"ig_did","path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"0D1220F2-467E-4D48-BBCB-025C86440F18"},
+  {"domain":".instagram.com","expirationDate":1789465640.157965,"hostOnly":false,"httpOnly":false,"name":"csrftoken","path":"/","sameSite":"unspecified","secure":true,"session":false,"storeId":"0","value":"6czU5mmbUNXycRGqeind6j"},
+  {"domain":".instagram.com","expirationDate":1783597036.37542,"hostOnly":false,"httpOnly":true,"name":"datr","path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"7C9AaEc527z0L5tTl2O7jwnk"},
+  {"domain":".instagram.com","expirationDate":1783597036.532155,"hostOnly":false,"httpOnly":true,"name":"ps_l","path":"/","sameSite":"lax","secure":true,"session":false,"storeId":"0","value":"1"},
+  {"domain":".instagram.com","expirationDate":1783597036.532193,"hostOnly":false,"httpOnly":true,"name":"ps_n","path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"1"},
+  {"domain":".instagram.com","expirationDate":1780573037.054829,"hostOnly":false,"httpOnly":false,"name":"ig_nrcb","path":"/","sameSite":"unspecified","secure":true,"session":false,"storeId":"0","value":"1"},
+  {"domain":".instagram.com","expirationDate":1755510370,"hostOnly":false,"httpOnly":false,"name":"wd","path":"/","sameSite":"lax","secure":true,"session":false,"storeId":"0","value":"1920x958"},
+  {"domain":".instagram.com","expirationDate":1755510370,"hostOnly":false,"httpOnly":false,"name":"dpr","path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"1"},
+  {"domain":".instagram.com","expirationDate":1786441566.094506,"hostOnly":false,"httpOnly":true,"name":"sessionid","path":"/","sameSite":"unspecified","secure":true,"session":false,"storeId":"0","value":"76249404687%3AzqsLCwJ3b8fmz7%3A3%3AAYf5OzS-vvTXJ66t62uZWDoE_ZeWWG-tI8Wt0OZdPA"},
+  {"domain":".instagram.com","expirationDate":1762681640.158198,"hostOnly":false,"httpOnly":false,"name":"ds_user_id","path":"/","sameSite":"no_restriction","secure":true,"session":false,"storeId":"0","value":"76249404687"},
+  {"domain":".instagram.com","hostOnly":false,"httpOnly":true,"name":"rur","path":"/","sameSite":"lax","secure":true,"session":true,"storeId":"0","value":"\"CLN\\05476249404687\\0541786441640:01fef706dcef3660d28e3f20004ff9add1ff89648486b94686d26ae5535d6a7bdf6a3bcd\""}
+]

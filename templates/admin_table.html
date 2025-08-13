@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<title>Адмін панель</title>
+<style>
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    th, td {
+        padding: 8px;
+        border: 1px solid #ddd;
+        text-align: left;
+    }
+    tr.waiting { background-color: #fff7c0; }  /* желтенькая */
+    tr.accepted { background-color: #c0ffc0; } /* зеленая */
+    tr.rejected { background-color: #ffc0c0; } /* красноватая */
+
+    button {
+        margin-right: 5px;
+        padding: 5px 10px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        color: #fff;
+    }
+    button.accept {
+        background-color: #4CAF50; /* зеленый */
+    }
+    button.reject {
+        background-color: #f44336; /* красный */
+    }
+    button.delete {
+        background-color: #888888; /* серый */
+    }
+    button:hover {
+        opacity: 0.85;
+    }
+</style>
+<script>
+function hideActionButtons(rowId) {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+    const buttons = row.querySelectorAll(".action-btn");
+    buttons.forEach(btn => btn.style.display = "none");
+}
+
+function setRowStatus(rowId, status) {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+    row.classList.remove("waiting", "accepted", "rejected");
+    if (status === "Прийнято") row.classList.add("accepted");
+    else if (status.startsWith("Відхилено")) row.classList.add("rejected");
+}
+</script>
+</head>
+<body>
+<h2>Адмін панель</h2>
+<table>
+    <thead>
+        <tr>
+            <th>ПІБ</th>
+            <th>Телефон</th>
+            <th>Instagram</th>
+            <th>TikTok</th>
+            <th>YouTube Shorts</th>
+            <th>Підписники / Перегляди</th>
+            <th>Ідея</th>
+            <th>Telegram</th>
+            <th>Дата</th>
+            <th>Статус</th>
+            <th>Дії</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        {% set row_id = "row_" + row["chat_id"] %}
+        {% set status = row["Статус"] %}
+        <tr id="{{ row_id }}" class="{% if status == 'Прийнято' %}accepted{% elif status.startswith('Відхилено') %}rejected{% else %}waiting{% endif %}">
+            <td>{{ row["ПІБ"] }}</td>
+            <td>{{ row["Телефон"] }}</td>
+            <td>{{ row["Instagram"] }}</td>
+            <td>{{ row["TikTok"] }}</td>
+            <td>{{ row["YouTube Shorts"] }}</td>
+            <td>{{ row["Підписники / Перегляди"] }}</td>
+            <td>{{ row["Ідея"] }}</td>
+            <td>{{ row["Telegram username"] }}</td>
+            <td>{{ row["Дата"] }}</td>
+            <td>{{ row["Статус"] }}</td>
+            <td>
+                {% if status not in ['Прийнято'] and not status.startswith('Відхилено') %}
+                    <form style="display:inline;" method="post" action="{{ url_for('action', chat_id=row['chat_id'], action='accept') }}" onsubmit="setRowStatus('{{ row_id }}','Прийнято'); hideActionButtons('{{ row_id }}');">
+                        <button type="submit" class="action-btn accept">Прийняти</button>
+                    </form>
+                    <form style="display:inline;" method="post" action="{{ url_for('action', chat_id=row['chat_id'], action='reject_1') }}" onsubmit="setRowStatus('{{ row_id }}','Відхилено (1)'); hideActionButtons('{{ row_id }}');">
+                        <button type="submit" class="action-btn reject">Не відповідає вимогам</button>
+                    </form>
+                    <form style="display:inline;" method="post" action="{{ url_for('action', chat_id=row['chat_id'], action='reject_2') }}" onsubmit="setRowStatus('{{ row_id }}','Відхилено (2)'); hideActionButtons('{{ row_id }}');">
+                        <button type="submit" class="action-btn reject">Не всі кроки</button>
+                    </form>
+                    <form style="display:inline;" method="post" action="{{ url_for('action', chat_id=row['chat_id'], action='reject_3') }}" onsubmit="setRowStatus('{{ row_id }}','Відхилено (3)'); hideActionButtons('{{ row_id }}');">
+                        <button type="submit" class="action-btn reject">Немає підписки</button>
+                    </form>
+                    <form style="display:inline;" method="post" action="{{ url_for('action', chat_id=row['chat_id'], action='reject_4') }}" onsubmit="setRowStatus('{{ row_id }}','Відхилено (4)'); hideActionButtons('{{ row_id }}');">
+                        <button type="submit" class="action-btn reject">Макс. кількість</button>
+                    </form>
+                {% endif %}
+                <form style="display:inline;" method="post" action="{{ url_for('delete', chat_id=row['chat_id']) }}">
+                    <button type="submit" class="delete">Видалити</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<form method="post" action="{{ url_for('delete_all') }}">
+    <button type="submit" class="delete">Видалити всі</button>
+</form>
+</body>
+</html>
