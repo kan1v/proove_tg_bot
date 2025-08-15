@@ -1,12 +1,10 @@
 # admin.py
 import logging
 import asyncio
-import time
 import csv
 from flask import Flask, render_template, redirect, url_for, request
 from flask_basicauth import BasicAuth
-from tg_bot import bot, bot_loop, bot_loop_ready, ADMIN_CHAT_IDS, CSV_FILE  # Импорт из бота
-
+from tg_bot import bot, ADMIN_CHAT_IDS, CSV_FILE, bot_loop  # loop бота
 
 # ---------------- ЛОГИ ----------------
 logging.basicConfig(level=logging.INFO)
@@ -46,82 +44,46 @@ REJECT_REASONS = {
 
 # ---------------- ВСПОМОГАТЕЛЬНЫЕ ----------------
 def read_csv():
-    """Читаем таблицу заявок"""
     with open(CSV_FILE, "r", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
-
-
-def _send_message(chat_id: int, text: str) -> bool:
-    max_wait = 5  # секунд
-    waited = 0
-    while bot_loop is None and waited < max_wait:
-        time.sleep(0.1)
-        waited += 0.1
-
-    if bot_loop is None:
-        logger.error(f"❌ bot_loop так и не готов, сообщение не отправлено chat_id={chat_id}")
-        return False
-
-    try:
-        future = asyncio.run_coroutine_threadsafe(bot.send_message(chat_id, text), bot_loop)
-        future.result(timeout=15)
-        logger.info(f"📩 Сообщение отправлено chat_id={chat_id}")
-        return True
-    except Exception as e:
-        logger.error(f"❌ Ошибка при отправке chat_id={chat_id}: {e}")
-        return False
-
-
-
-
-def notify_admins(text: str):
-    """Уведомляем всех админов"""
-    sent = sum(_send_message(admin_id, text) for admin_id in ADMIN_CHAT_IDS)
-    logger.info(f"👑 Уведомления админам отправлены {sent}/{len(ADMIN_CHAT_IDS)}")
-
-def update_status_and_notify(chat_id: str, status: str, username: str, reason_key: str | None = None):
-    """Меняем статус заявки и шлём уведомления"""
-    rows = []
-    pib = ""
-    updated = False
-
-    # Читаем и меняем статус
-    with open(CSV_FILE, "r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if str(row.get("chat_id")) == str(chat_id):
-                if status == "Відхилено" and reason_key:
-                    row["Статус"] = f"Відхилено ({reason_key})"
-                else:
-                    row["Статус"] = status
-                updated = True
-                pib = row.get("ПІБ", "")
-            rows.append(row)
-
-    if not updated:
-        logger.warning(f"⚠ Заявка с chat_id={chat_id} не найдена")
-        return
-
-    # Записываем обновлённые данные
+def write_csv(rows):
     with open(CSV_FILE, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
         writer.writeheader()
         writer.writerows(rows)
 
-    # Отправка пользователю
-    if status == "Прийнято":
-        _send_message(int(chat_id), ACCEPT_TEXT)
-    elif status == "Відхилено":
-        _send_message(int(chat_id), REJECT_REASONS.get(reason_key, "❌ Ваша заявка відхилена."))
+def send_async_message(chat_id: int, text: str):
+    """Отправка сообщений через Aiogram из синхронного Flask."""
+    try:
+        asyncio.run_coroutine_threadsafe(bot.send_message(chat_id, text), bot_loop)
+    except Exception as e:
+        logger.error(f"Не удалось отправить сообщение пользователю {chat_id}: {e}")
 
-    # Уведомление админам
-    notify_admins(
-        f"✏️ Статус заявки змінено через адмін-панель:\n"
-        f"👤 {pib}\n"
-        f"@{username} ({chat_id})\n"
-        f"Статус: {('Відхилено (' + reason_key + ')') if status=='Відхилено' and reason_key else status}"
-    )
+def update_status_and_notify(chat_id: str, status: str, reason_key: str = None):
+    """Обновление статуса заявки и отправка сообщений пользователю."""
+    rows = read_csv()
+    updated = False
+
+    for row in rows:
+        if str(row.get("chat_id")) == str(chat_id):
+            if status == "Відхилено" and reason_key:
+                row["Статус"] = f"Відхилено ({reason_key})"
+            else:
+                row["Статус"] = status
+            updated = True
+
+    if not updated:
+        logger.warning(f"⚠ Заявка с chat_id={chat_id} не найдена")
+        return
+
+    write_csv(rows)
+
+    # Отправка уведомления пользователю
+    if status == "Прийнято":
+        send_async_message(int(chat_id), ACCEPT_TEXT)
+    elif status == "Відхилено":
+        send_async_message(int(chat_id), REJECT_REASONS.get(reason_key, "❌ Ваша заявка відхилена."))
 
 # ---------------- ROUTES ----------------
 @app.route("/")
@@ -132,12 +94,11 @@ def index():
 @app.route("/action/<chat_id>/<action>", methods=["POST"])
 @basic_auth.required
 def action(chat_id, action):
-    username = next((r["Telegram username"] for r in read_csv() if str(r["chat_id"]) == str(chat_id)), "")
     if action == "accept":
-        update_status_and_notify(chat_id, "Прийнято", username)
+        update_status_and_notify(chat_id, "Прийнято")
     elif action.startswith("reject_"):
         reason_key = action.split("_", 1)[1]
-        update_status_and_notify(chat_id, "Відхилено", username, reason_key)
+        update_status_and_notify(chat_id, "Відхилено", reason_key)
     return redirect(url_for('index'))
 
 @app.route("/delete/<chat_id>", methods=["POST"])
@@ -146,18 +107,19 @@ def delete(chat_id):
     rows = read_csv()
     target = next((r for r in rows if str(r["chat_id"]) == str(chat_id)), None)
     if target:
-        notify_admins(
+        notify_admin = (
             f"🗑 Заявку видалено через адмін-панель:\n"
             f"👤 {target.get('ПІБ', '')}\n"
             f"@{target.get('Telegram username', '')} ({chat_id})\n"
             f"Статус: {target.get('Статус', '')}"
         )
-    # Удаляем запись
-    rows = [r for r in rows if str(r["chat_id"]) != str(chat_id)]
-    with open(CSV_FILE, "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        writer.writerows(rows)
+        for admin in ADMIN_CHAT_IDS:
+            send_async_message(admin, notify_admin)
+
+        # Удаление заявки из CSV
+        rows = [r for r in rows if str(r["chat_id"]) != str(chat_id)]
+        write_csv(rows)
+
     return redirect(url_for('index'))
 
 @app.route("/delete_all", methods=["POST"])
@@ -166,15 +128,18 @@ def delete_all():
     rows = read_csv()
     count = len(rows)
     if count > 0:
-        notify_admins(
+        text_admin_message = (
             f"🔥 Всі заявки ({count}) були видалені через адмін-панель!\n"
             f"Останній запис:\n"
             f"👤 {rows[-1].get('ПІБ', '')}\n"
             f"@{rows[-1].get('Telegram username', '')} ({rows[-1].get('chat_id', '')})"
         )
-    with open(CSV_FILE, "w", encoding="utf-8", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(FIELDNAMES)
+        for admin in ADMIN_CHAT_IDS:
+            send_async_message(admin, text_admin_message)
+
+    # Очистка CSV
+    write_csv([])
+
     return redirect(url_for('index'))
 
 # ---------------- ЗАПУСК ----------------

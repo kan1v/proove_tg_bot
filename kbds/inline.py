@@ -25,7 +25,7 @@ def admin_choices_kbd(chat_id: int, username: str) -> InlineKeyboardMarkup:
 
 admin_panel = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="Адмін панель", url="https://249d19e4fad4.ngrok-free.app")],
-    [InlineKeyboardButton(text="Кількість користувачів", callback_data="get_users")],
+    [InlineKeyboardButton(text="Добавити Адміністратора", callback_data="add_new_admin")],
 ])
 
 

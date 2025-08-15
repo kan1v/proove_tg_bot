@@ -5,7 +5,7 @@ import csv
 import logging
 import datetime
 import re
-import random
+import json
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
@@ -27,18 +27,33 @@ load_dotenv()
 import config
 from check_subscriptions import check_instagram_follow, check_tiktok_follow
 
+bot_loop = asyncio.get_event_loop()
 
-bot_loop: asyncio.AbstractEventLoop | None = None
-bot_loop_ready: asyncio.Event = asyncio.Event()
 
 # Настройки
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tg_bot")
 
 BOT_TOKEN = os.getenv("TOKEN") or config.BOT_TOKEN
-ADMIN_CHAT_IDS = [
-    int(x.strip()) for x in (os.getenv("ADMIN_CHAT_ID") or str(config.ADMIN_ID)).split(",")
-]
+
+ADMINS_FILE = "admins.json"
+
+def load_admins():
+    if not os.path.exists(ADMINS_FILE):
+        with open(ADMINS_FILE, "w", encoding="utf-8") as f:
+            json.dump([], f)
+    with open(ADMINS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def add_admin(chat_id: int):
+    admins = load_admins()
+    if chat_id not in admins:
+        admins.append(chat_id)
+        with open(ADMINS_FILE, "w", encoding="utf-8") as f:
+            json.dump(admins, f)
+    return admins
+
+ADMIN_CHAT_IDS = load_admins()
 
 CSV_FILE = "data.csv"
 
@@ -238,8 +253,7 @@ async def get_instagram(message: types.Message, state: FSMContext):
 
     if "instagram.com" not in text:
         await message.answer(
-            "❗ Це не схоже на Instagram посилання. Спробуй ще раз або натисни, якщо немає акаунту:",
-            reply_markup=social_no_kbd,
+            "❗ Це не схоже на Instagram посилання. Спробуй ще раз",
         )
         return
 
@@ -271,7 +285,7 @@ async def get_instagram(message: types.Message, state: FSMContext):
         await state.set_state(Form.tiktok)
     else:
         await message.answer(
-            "❌ Ми не знайшли вашу підписку на Instagram. Підпишіться на @proove_gaming і натисніть 'Я підписався'.",
+            "❌ Ми не знайшли вашу підписку на Instagram. Підпишіться на proove_gaming_ua і натисніть 'Я підписався'.",
             reply_markup=subscribe_keyboard
         )
         await state.set_state(Form.check_subscription)
@@ -288,8 +302,7 @@ async def get_tiktok(message: types.Message, state: FSMContext):
 
     if "tiktok.com" not in text:
         await message.answer(
-            "❗ Це не схоже на TikTok посилання. Спробуй ще раз або натисни, якщо немає акаунту:",
-            reply_markup=social_no_kbd
+            "❗ Це не схоже на TikTok посилання. Спробуй ще раз"
         )
         return
 
@@ -318,7 +331,7 @@ async def get_tiktok(message: types.Message, state: FSMContext):
         await state.set_state(Form.followers)
     else:
         await message.answer(
-            "❌ Ми не знайшли вашу підписку на TikTok. Підпишіться на @proove_gaming і натисніть 'Я підписався'.",
+            "❌ Ми не знайшли вашу підписку на TikTok. Підпишіться на proove_gaming_ua і натисніть 'Я підписався'.",
             reply_markup=subscribe_keyboard
         )
         await state.set_state(Form.check_subscription)
@@ -362,8 +375,8 @@ async def check_subscription_again(callback: types.CallbackQuery, state: FSMCont
                 return
             if ok:
                 await callback.message.answer("✅ Підписка на TikTok підтверджена. Продовжуємо.")
-                await callback.message.answer("🔗 Введи посилання на свій YouTube Shorts профіль:", reply_markup=social_no_kbd)
-                await state.set_state(Form.youtube)
+                await callback.message.answer("👥 Введи кількість підписників або середні перегляди:")
+                await state.set_state(Form.followers)
                 return
             else:
                 await callback.message.answer("❌ Все ще не бачимо підписки в TikTok. Перевірте та спробуйте ще.")
@@ -406,14 +419,10 @@ async def no_social_account(callback: types.CallbackQuery, state: FSMContext):
     current_state = await state.get_state()
     if current_state == Form.instagram.state:
         await state.update_data(instagram="Немає")
-        await callback.message.answer("🔗 Введи посилання на свій TikTok профіль:", reply_markup=social_no_kbd)
+        await callback.message.answer("🔗 Введи посилання на свій TikTok профіль:")
         await state.set_state(Form.tiktok)
     elif current_state == Form.tiktok.state:
         await state.update_data(tiktok="Немає")
-        await callback.message.answer("🔗 Введи посилання на свій YouTube Shorts профіль:", reply_markup=social_no_kbd)
-        await state.set_state(Form.youtube)
-    elif current_state == Form.youtube.state:
-        await state.update_data(youtube="Немає")
         await callback.message.answer("👥 Введи кількість підписників або середні перегляди:")
         await state.set_state(Form.followers)
     await callback.answer()
@@ -545,15 +554,40 @@ async def handle_reject(callback: types.CallbackQuery):
     await callback.answer(f"Заявка відхилена з причиною {reason_key}!")
 
 
+# FSM для добавления нового админа
+class AdminFSM(StatesGroup):
+    waiting_chat_id = State()
+
+# Обработчик кнопки "Добавить нового админа"
+@dp.callback_query(lambda c: c.data == "add_new_admin")
+async def add_new_admin_callback(callback: types.CallbackQuery, state: FSMContext):
+    # Проверяем, что это админ
+    admins = load_admins()
+    if callback.from_user.id not in admins:
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    await callback.message.answer("Введи chat_id пользователя, которого хочешь сделать админом:")
+    await state.set_state(AdminFSM.waiting_chat_id)
+    await callback.answer()
+
+@dp.message(AdminFSM.waiting_chat_id)
+async def receive_new_admin(message: types.Message, state: FSMContext):
+    try:
+        new_admin_id = int(message.text)
+    except ValueError:
+        await message.answer("❌ Некорректный chat_id. Введите число.")
+        return
+
+    admins = add_admin(new_admin_id)
+    await message.answer(f"✅ Пользователь {new_admin_id} добавлен в админы!\nТекущие админы: {admins}")
+    await state.clear()
+
+
 
 # ------------------ Запуск ------------------
 async def run_bot():
-    global bot_loop
-    log.info("Запуск бота...")
-
-    bot_loop = asyncio.get_running_loop()
-    bot_loop_ready.set()  # сигнал готовности
-
+    
     await bot.delete_webhook(drop_pending_updates=True)
     await set_commands()
 
@@ -566,8 +600,8 @@ async def run_bot():
 
     await dp.start_polling(bot)
 
-if __name__ == "__main__":
-    try:
-        asyncio.run(run_bot())
-    except (KeyboardInterrupt, SystemExit):
-        log.info("Бот зупинений вручну")
+# if __name__ == "__main__":
+#     try:
+#         asyncio.run(run_bot())
+#     except (KeyboardInterrupt, SystemExit):
+#         log.info("Бот зупинений вручну")
